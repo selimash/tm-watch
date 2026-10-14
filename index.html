@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TM Watch</title>
+<style>
+:root{--bg:#141414;--panel:#1f1f1f;--text:#fff;--muted:#a3a3a3;--red:#e50914}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:"Helvetica Neue",Arial,sans-serif;min-height:100vh}
+nav{position:fixed;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;gap:24px;padding:14px 4%;background:linear-gradient(#000c,transparent);transition:background .3s}
+nav.solid{background:var(--bg)}
+.logo{color:var(--red);font-weight:900;font-size:1.7rem;letter-spacing:1px;cursor:pointer}
+nav a{color:#e5e5e5;font-size:.9rem;cursor:pointer;text-decoration:none}
+nav a:hover,nav a.on{color:#fff;font-weight:700}
+#q{margin-left:auto;background:#000a;border:1px solid #fff6;color:#fff;padding:7px 12px;border-radius:3px;width:200px;font-size:.9rem}
+#q:focus{outline:2px solid #fff;width:260px}
+.hero{height:80vh;min-height:420px;display:flex;align-items:flex-end;padding:0 4% 8%;background-size:cover;background-position:center top;position:relative}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#000c 0,transparent 60%),linear-gradient(transparent 60%,var(--bg))}
+.hero>div{position:relative;z-index:1;max-width:520px}
+.hero h1{font-size:clamp(2rem,5vw,3.6rem);margin-bottom:12px}
+.hero p{color:#ddd;line-height:1.5;margin-bottom:18px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+button{font:inherit;cursor:pointer;border:0;border-radius:4px;padding:10px 24px;font-weight:700}
+.b1{background:#fff;color:#000}.b2{background:#6d6d6eb3;color:#fff;margin-left:8px}
+.b1:hover{background:#ffffffbf}.b2:hover{background:#6d6d6e66}
+h2{font-size:1.25rem;margin:0 4% 10px}
+.row{margin-bottom:28px}
+.track{display:flex;gap:6px;overflow-x:auto;padding:6px 4% 14px;scroll-snap-type:x proximity;scrollbar-width:none}
+.track::-webkit-scrollbar{display:none}
+.card{flex:0 0 clamp(120px,15vw,200px);aspect-ratio:2/3;border-radius:4px;background:var(--panel) center/cover;position:relative;cursor:pointer;scroll-snap-align:start;transition:transform .2s;overflow:hidden}
+.card:hover,.card:focus-visible{transform:scale(1.08);z-index:2;outline:2px solid #fff}
+.card span{position:absolute;inset:auto 0 0;padding:24px 8px 8px;font-size:.8rem;font-weight:700;background:linear-gradient(transparent,#000d)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:100px 4% 40px}
+.grid .card{flex:none;width:100%}
+#modal{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;z-index:20;padding:16px}
+#modal.open{display:flex}
+.m{background:var(--panel);border-radius:8px;max-width:760px;width:100%;max-height:90vh;overflow:auto}
+.mh{height:320px;background-size:cover;background-position:center top;position:relative}
+.mh::after{content:"";position:absolute;inset:0;background:linear-gradient(transparent 50%,var(--panel))}
+.mb{padding:0 28px 28px}
+.mb h3{font-size:1.8rem;margin-bottom:8px}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:12px}.meta b{color:#46d369}
+.mb p{line-height:1.6;color:#ddd}
+.x{position:absolute;top:12px;right:12px;z-index:2;background:#141414;color:#fff;border-radius:50%;width:36px;height:36px;padding:0}
+.note{margin:110px 4% 0;padding:12px 16px;background:#2a2a2a;border-left:4px solid var(--red);font-size:.85rem;color:#ccc;line-height:1.5}
+footer{padding:30px 4%;color:var(--muted);font-size:.75rem}
+@media(max-width:640px){nav{gap:12px}nav a.hide{display:none}#q{width:130px}.mh{height:200px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<nav id="nav">
+  <div class="logo" onclick="go('home')">TM WATCH</div>
+  <a class="on" data-v="home" onclick="go('home')">Home</a>
+  <a class="hide" data-v="tv" onclick="go('tv')">TV Shows</a>
+  <a class="hide" data-v="movie" onclick="go('movie')">Movies</a>
+  <input id="q" type="search" placeholder="Search titles" aria-label="Search titles">
+</nav>
+<main id="app"></main>
+<div id="modal" onclick="if(event.target===this)closeM()"><div class="m" id="m"></div></div>
+<footer>Catalog data from TMDB. This site lists titles and details only; it does not host or stream video.</footer>
+
+<script>
+// 1) Get a free key at themoviedb.org/settings/api, paste it here.
+//    Leave empty to see demo data.
+const KEY = "";
+const API = "https://api.themoviedb.org/3", IMG = "https://image.tmdb.org/t/p/";
+
+const DEMO = ["Midnight Harbor","The Last Orchard","Static Bloom","Paper Kingdoms","Iron Tide","Quiet Engines","Saltwater Saints","Glass Mountain","Neon Cartographers","The Long Dusk","Fox & Ember","Parallel Spring"].map((t,i)=>({
+  id:i,title:t,type:i%2?"tv":"movie",year:2015+i,rating:(6+(i%4)*.8).toFixed(1),
+  overview:"Demo title. Add your free TMDB key in index.html to load the real catalog of movies and TV shows.",hue:(i*37)%360}));
+
+const $ = s => document.querySelector(s), app = $("#app");
+const esc = s => String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const cache = {};
+
+async function get(path, params=""){
+  const url = `${API}${path}?api_key=${KEY}${params}`;
+  if(cache[url]) return cache[url];
+  const r = await fetch(url);
+  if(!r.ok) throw new Error(r.status);
+  return cache[url] = (await r.json()).results || [];
+}
+
+function norm(x, forced){
+  const type = forced || x.media_type || (x.title ? "movie" : "tv");
+  return {id:x.id,type,title:x.title||x.name,overview:x.overview,
+    year:(x.release_date||x.first_air_date||"").slice(0,4),
+    rating:x.vote_average?x.vote_average.toFixed(1):"",
+    poster:x.poster_path?IMG+"w342"+x.poster_path:"",
+    back:x.backdrop_path?IMG+"w1280"+x.backdrop_path:""};
+}
+const items = (a,t) => a.filter(x=>x.media_type!=="person").map(x=>norm(x,t));
+
+function bg(it){
+  if(it.poster) return `background-image:url(${it.poster})`;
+  const h = it.hue ?? 0;
+  return `background-image:linear-gradient(160deg,hsl(${h} 55% 28%),hsl(${(h+50)%360} 60% 12%))`;
+}
+function card(it){
+  window.__items = window.__items || {};
+  window.__items[it.type+it.id] = it;
+  return `<div class="card" tabindex="0" role="button" style="${bg(it)}" onclick="openM('${it.type+it.id}')" onkeydown="if(event.key==='Enter')openM('${it.type+it.id}')"><span>${esc(it.title)}</span></div>`;
+}
+const row = (title, list) => list.length ? `<section class="row"><h2>${esc(title)}</h2><div class="track">${list.map(card).join("")}</div></section>` : "";
+
+function hero(it){
+  const s = it.back ? `background-image:url(${it.back})` : bg(it);
+  return `<header class="hero" style="${s}"><div><h1>${esc(it.title)}</h1><p>${esc(it.overview)}</p>
+  <button class="b1" onclick="openM('${it.type+it.id}')">More info</button></div></header>`;
+}
+
+async function go(view){
+  document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",a.dataset.v===view));
+  scrollTo(0,0);
+  if(!KEY){
+    const m = DEMO.filter(x=>x.type==="movie"), t = DEMO.filter(x=>x.type==="tv");
+    const pick = view==="movie"?[["Movies",m]]:view==="tv"?[["TV Shows",t]]:[["Trending",DEMO],["Movies",m],["TV Shows",t]];
+    window.__items = {}; DEMO.forEach(x=>window.__items[x.type+x.id]=x);
+    app.innerHTML = hero(DEMO[0]) + `<div style="margin-top:-60px;position:relative;z-index:2">${pick.map(([a,b])=>row(a,b)).join("")}</div>`;
+    return;
+  }
+  app.innerHTML = `<div class="note">Loading…</div>`;
+  try{
+    const defs = view==="movie"
+      ? [["Popular movies","/movie/popular","movie"],["Top rated movies","/movie/top_rated","movie"],["Now playing","/movie/now_playing","movie"],["Upcoming","/movie/upcoming","movie"]]
+      : view==="tv"
+      ? [["Popular TV shows","/tv/popular","tv"],["Top rated TV shows","/tv/top_rated","tv"],["On the air","/tv/on_the_air","tv"],["Airing today","/tv/airing_today","tv"]]
+      : [["Trending this week","/trending/all/week"],["Popular movies","/movie/popular","movie"],["Popular TV shows","/tv/popular","tv"],["Top rated movies","/movie/top_rated","movie"],["Top rated TV shows","/tv/top_rated","tv"]];
+    const res = await Promise.all(defs.map(d=>get(d[1]).then(r=>items(r,d[2]))));
+    const first = res[0].find(x=>x.back) || res[0][0];
+    app.innerHTML = hero(first) + `<div style="margin-top:-60px;position:relative;z-index:2">${defs.map((d,i)=>row(d[0],res[i])).join("")}</div>`;
+  }catch(e){
+    app.innerHTML = `<div class="note">Couldn't load the catalog. Check that your TMDB key is correct and you're online.</div>`;
+  }
+}
+
+let timer;
+$("#q").addEventListener("input", e=>{
+  clearTimeout(timer);
+  const v = e.target.value.trim();
+  if(!v){ go("home"); return; }
+  timer = setTimeout(async()=>{
+    document.querySelectorAll("nav a").forEach(a=>a.classList.remove("on"));
+    let list;
+    if(!KEY) list = DEMO.filter(x=>x.title.toLowerCase().includes(v.toLowerCase()));
+    else { try{ list = items(await get("/search/multi",`&query=${encodeURIComponent(v)}`)); }catch(_){ list=[]; } }
+    app.innerHTML = list.length
+      ? `<div class="grid">${list.map(card).join("")}</div>`
+      : `<div class="note">No results for "${esc(v)}". Try a different title.</div>`;
+  }, 300);
+});
+
+function openM(k){
+  const it = window.__items[k]; if(!it) return;
+  const s = it.back ? `background-image:url(${it.back})` : bg(it);
+  $("#m").innerHTML = `<div class="mh" style="${s}"><button class="x" onclick="closeM()" aria-label="Close">✕</button></div>
+  <div class="mb"><h3>${esc(it.title)}</h3>
+  <div class="meta">${it.rating?`<b>${esc(it.rating)} rating</b> &nbsp;`:""}${esc(it.year)} &nbsp;${it.type==="tv"?"TV show":"Movie"}</div>
+  <p>${esc(it.overview)||"No description available."}</p></div>`;
+  $("#modal").classList.add("open");
+}
+function closeM(){ $("#modal").classList.remove("open"); }
+addEventListener("keydown", e=>{ if(e.key==="Escape") closeM(); });
+addEventListener("scroll", ()=>$("#nav").classList.toggle("solid", scrollY>40), {passive:true});
+
+go("home");
+</script>
+</body>
+</html>
